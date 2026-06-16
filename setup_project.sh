@@ -1,101 +1,76 @@
 #!/bin/bash
+# setup_project.sh
+# Usage: ./setup_project.sh
 
-# =========================
-# COLORS
-# =========================
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-YELLOW="\033[1;33m"
-BLUE="\033[0;34m"
-CYAN="\033[0;36m"
-NC="\033[0m"
-
-step() {
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}▶ $1${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+section() {
+    echo ""
+    echo "=================================================="
+    echo "$1"
+    echo "=================================================="
 }
 
-ok() { echo -e "${GREEN}✔ $1${NC}"; }
-warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
-fail() { echo -e "${RED}✖ $1${NC}"; }
-
-run() {
-    echo -e "${CYAN}⏳ $1...${NC}"
-}
-
-# =========================
-# HEADER
-# =========================
-echo ""
-echo -e "${BLUE}======================================${NC}"
-echo -e "${BLUE}  ATTENDANCE TRACKER BOOTSTRAPPER    ${NC}"
-echo -e "${BLUE}======================================${NC}"
-
-# =========================
-# INPUT PHASE
-# =========================
-step "PROJECT INITIALIZATION"
+# ------------------------------------------------------------------
+# 1. Project name input + collision check
+# ------------------------------------------------------------------
+section "PROJECT INITIALIZATION"
 
 while true; do
-    read -p "Enter project suffix: " PROJECT_NAME
-    run "Validating project name"
-
+    read -p "Enter project identifier: " PROJECT_NAME
     if [[ -n "$PROJECT_NAME" ]]; then
-        ok "Project name accepted"
         break
-    else
-        fail "Project name cannot be empty"
     fi
+    echo "[-] Project name cannot be empty."
 done
 
 BASE_DIR="attendance_tracker_${PROJECT_NAME}"
 
-run "Checking project collision"
-
 if [[ -d "$BASE_DIR" ]]; then
-    fail "Directory already exists"
-    exit 1
-else
-    ok "No conflicts found"
-fi
-
-# =========================
-# ENV CHECK
-# =========================
-step "ENVIRONMENT CHECK"
-
-run "Checking Python3 installation"
-if python3 --version >/dev/null 2>&1; then
-    ok "Python3 detected"
-else
-    fail "Python3 missing"
+    echo "[-] Error: directory '$BASE_DIR' already exists. Choose a different suffix."
     exit 1
 fi
 
-# =========================
-# DIRECTORY CREATION
-# =========================
-step "PROJECT STRUCTURE CREATION"
+# ------------------------------------------------------------------
+# 2. Signal trap - active from this point on, so any interruption
+#    during creation/configuration is caught and cleaned up.
+# ------------------------------------------------------------------
+cleanup() {
+    echo ""
+    section "INTERRUPT DETECTED (CTRL+C)"
 
-run "Creating base directory"
-mkdir -p "$BASE_DIR"
-ok "Base directory created"
+    if [[ -d "$BASE_DIR" ]]; then
+        ARCHIVE_NAME="${BASE_DIR}_archive"
+        echo "[*] Archiving current project state -> ${ARCHIVE_NAME}.tar.gz"
+        if tar -czf "${ARCHIVE_NAME}.tar.gz" "$BASE_DIR" 2>/dev/null; then
+            echo "[+] Archive created."
+        else
+            echo "[-] Archive creation failed."
+        fi
 
-run "Creating Helpers folder"
-mkdir -p "$BASE_DIR/Helpers"
-ok "Helpers created"
+        echo "[*] Removing incomplete project directory."
+        rm -rf "$BASE_DIR"
+        echo "[+] Workspace cleaned."
+    else
+        echo "[-] No project directory existed yet, nothing to archive."
+    fi
 
-run "Creating reports folder"
-mkdir -p "$BASE_DIR/reports"
-ok "Reports created"
+    echo "[+] Safe exit complete."
+    exit 1
+}
 
-# =========================
-# FILE GENERATION
-# =========================
-step "FILE GENERATION"
+trap cleanup SIGINT
 
-run "Writing assets.csv"
+# ------------------------------------------------------------------
+# 3. Directory architecture
+# ------------------------------------------------------------------
+section "PROJECT STRUCTURE CREATION"
+
+mkdir -p "$BASE_DIR/Helpers" "$BASE_DIR/reports"
+if [[ $? -ne 0 ]]; then
+    echo "[-] Error: could not create project directories (check permissions)."
+    exit 1
+fi
+echo "[+] Directory structure created."
+
 cat <<CSV > "$BASE_DIR/Helpers/assets.csv"
 Email,Names,Attendance Count,Absence Count
 alice@example.com,Alice Johnson,14,1
@@ -103,9 +78,12 @@ bob@example.com,Bob Smith,7,8
 charlie@example.com,Charlie Davis,4,11
 diana@example.com,Diana Prince,15,0
 CSV
-ok "assets.csv created"
+if [[ $? -ne 0 ]]; then
+    echo "[-] Error: could not write assets.csv (check permissions)."
+    exit 1
+fi
+echo "[+] Helpers/assets.csv created."
 
-run "Writing config.json"
 cat <<JSON > "$BASE_DIR/Helpers/config.json"
 {
   "thresholds": {
@@ -116,9 +94,19 @@ cat <<JSON > "$BASE_DIR/Helpers/config.json"
   "total_sessions": 15
 }
 JSON
-ok "config.json created"
+if [[ $? -ne 0 ]]; then
+    echo "[-] Error: could not write config.json (check permissions)."
+    exit 1
+fi
+echo "[+] Helpers/config.json created."
 
-run "Writing Python engine"
+touch "$BASE_DIR/reports/reports.log"
+if [[ $? -ne 0 ]]; then
+    echo "[-] Error: could not create reports/reports.log (check permissions)."
+    exit 1
+fi
+echo "[+] reports/reports.log created."
+
 cat <<'PY' > "$BASE_DIR/attendance_checker.py"
 import csv, json, os
 from datetime import datetime
@@ -158,137 +146,95 @@ def run():
 if __name__ == "__main__":
     run()
 PY
+if [[ $? -ne 0 ]]; then
+    echo "[-] Error: could not write attendance_checker.py (reconfigure permissions)."
+    exit 1
+fi
+echo "[+] attendance_checker.py created."
 
-ok "attendance_checker.py created"
-# =========================
-# CTRL + C TRAP SYSTEM
-# =========================
-cleanup() {
-    echo ""
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}⚠ INTERRUPT DETECTED (CTRL + C)${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+# ------------------------------------------------------------------
+# 4. Dynamic configuration (stream editing with sed)
+# ------------------------------------------------------------------
+section "CONFIGURATION SETUP"
 
-    run "Starting safe shutdown procedure"
+read -p "Do you want to update the attendance thresholds? (y/n): " UPDATE_CHOICE
 
-    if [[ -d "$BASE_DIR" ]]; then
-        ok "Project directory detected"
+if [[ "$UPDATE_CHOICE" =~ ^[Yy]$ ]]; then
 
-        ARCHIVE_NAME="${BASE_DIR}_archive"
-
-        run "Creating backup archive"
-        tar -czf "${ARCHIVE_NAME}.tar.gz" "$BASE_DIR" >/dev/null 2>&1
-
-        if [[ $? -eq 0 ]]; then
-            ok "Backup successful: ${ARCHIVE_NAME}.tar.gz"
-        else
-            fail "Backup failed"
-        fi
-
-        run "Cleaning workspace"
-        rm -rf "$BASE_DIR"
-        ok "Temporary files removed"
-
-    else
-        warn "No project directory found"
-    fi
-
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN} SAFE EXIT COMPLETED${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-
-    exit 0
-}
-
-trap cleanup SIGINT
-# =========================
-# CONFIGURATION
-# =========================
-step "CONFIGURATION SETUP"
-
-while true; do
-    read -p "Warning threshold (0-100): " WARNING
-    run "Validating warning threshold"
-
-    if [[ "$WARNING" =~ ^[0-9]+$ ]] && (( WARNING >= 0 && WARNING <= 100 )); then
-        ok "Warning accepted"
-        break
-    else
-        fail "Invalid warning value"
-    fi
-done
-
-while true; do
-    read -p "Failure threshold (0-100): " FAILURE
-    run "Validating failure threshold"
-
-    if [[ "$FAILURE" =~ ^[0-9]+$ ]] && (( FAILURE >= 0 && FAILURE <= 100 )); then
-
-        if (( FAILURE < WARNING )); then
-            ok "Failure accepted"
+    while true; do
+        read -p "Warning threshold % (0-100) [default 75]: " WARNING
+        WARNING=${WARNING:-75}
+        if [[ "$WARNING" =~ ^[0-9]+$ ]] && (( WARNING >= 0 && WARNING <= 100 )); then
             break
-        else
-            warn "Failure must be less than warning ($WARNING)"
         fi
+        echo "[-] Invalid value. Enter a whole number between 0 and 100."
+    done
 
+    while true; do
+        read -p "Failure threshold % (0-100) [default 50]: " FAILURE
+        FAILURE=${FAILURE:-50}
+        if [[ "$FAILURE" =~ ^[0-9]+$ ]] && (( FAILURE >= 0 && FAILURE <= 100 )); then
+            if (( FAILURE < WARNING )); then
+                break
+            fi
+            echo "[-] Failure threshold must be lower than the warning threshold ($WARNING)."
+        else
+            echo "[-] Invalid value. Enter a whole number between 0 and 100."
+        fi
+    done
+
+    JSON_FILE="$BASE_DIR/Helpers/config.json"
+
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sed -i '' "s/\"warning\": [0-9]*/\"warning\": $WARNING/" "$JSON_FILE"
+        sed -i '' "s/\"failure\": [0-9]*/\"failure\": $FAILURE/" "$JSON_FILE"
     else
-        fail "Invalid failure value"
+        sed -i "s/\"warning\": [0-9]*/\"warning\": $WARNING/" "$JSON_FILE"
+        sed -i "s/\"failure\": [0-9]*/\"failure\": $FAILURE/" "$JSON_FILE"
     fi
-done
 
-run "Updating configuration file"
-
-JSON_FILE="$BASE_DIR/Helpers/config.json"
-
-if [[ "$(uname)" == "Darwin" ]]; then
-    sed -i '' "s/\"warning\": [0-9]*/\"warning\": $WARNING/" "$JSON_FILE"
-    sed -i '' "s/\"failure\": [0-9]*/\"failure\": $FAILURE/" "$JSON_FILE"
+    echo "[+] Thresholds updated: warning=$WARNING, failure=$FAILURE"
 else
-    sed -i "s/\"warning\": [0-9]*/\"warning\": $WARNING/" "$JSON_FILE"
-    sed -i "s/\"failure\": [0-9]*/\"failure\": $FAILURE/" "$JSON_FILE"
+    echo "[*] Keeping default thresholds (warning=75, failure=50)."
 fi
 
-ok "Configuration updated"
+# ------------------------------------------------------------------
+# 5. Environment validation (health check)
+# ------------------------------------------------------------------
+section "ENVIRONMENT VALIDATION"
 
-# =========================
-# FINAL VALIDATION
-# =========================
-step "FINAL VALIDATION"
+if python3 --version >/dev/null 2>&1; then
+    echo "[+] Python3 detected: $(python3 --version 2>&1)"
+else
+    echo "[-] Warning: Python3 is not installed. attendance_checker.py will not run without it."
+fi
 
-run "Checking file integrity"
-
-for file in \
-"$BASE_DIR/Helpers/assets.csv" \
-"$BASE_DIR/Helpers/config.json" \
-"$BASE_DIR/attendance_checker.py"
+ALL_OK=true
+for path in \
+    "$BASE_DIR/attendance_checker.py" \
+    "$BASE_DIR/Helpers/assets.csv" \
+    "$BASE_DIR/Helpers/config.json" \
+    "$BASE_DIR/reports/reports.log"
 do
-    if [[ -f "$file" ]]; then
-        ok "Found $(basename $file)"
+    if [[ -e "$path" ]]; then
+        echo "[+] Found ${path#$BASE_DIR/}"
     else
-        fail "Missing $(basename $file)"
+        echo "[-] Missing ${path#$BASE_DIR/}"
+        ALL_OK=false
     fi
 done
 
-# =========================
-# SUCCESS
-# =========================
-step "COMPLETION"
+if [[ "$ALL_OK" == false ]]; then
+    echo "[-] Project structure is incomplete."
+    exit 1
+fi
 
-ok "Project successfully generated"
-
+# ------------------------------------------------------------------
+# Done
+# ------------------------------------------------------------------
+section "COMPLETION"
+echo "[+] Project successfully generated at ./$BASE_DIR"
 echo ""
-echo -e "${GREEN}SYSTEM READY 🚀${NC}"
-echo ""
-echo "Next steps: Please run the following lines;"
-echo "cd $BASE_DIR"
-echo "python3 attendance_checker.py"
-
-
-echo ""
-echo ""
-
-echo "=============================================="
-echo "Created & Designed by  Herve Friend KUBANA 🎊"
-echo "---------------------------------------------"
+echo "Next steps:"
+echo "  cd $BASE_DIR"
+echo "  python3 attendance_checker.py"
