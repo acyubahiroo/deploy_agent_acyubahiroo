@@ -1,3 +1,7 @@
+WATCH A VIDEO THAT EXPLAINS HOW THE CODE WORKS IN DETAIL: 
+https://youtu.be/MQ5P-9FjU_k
+
+
 # deploy_agent_acyubahiroo
 This repository is created and contains a script to build a "Project Factory"; a shell script that automates the creation of the workspace, configures settings via the command line, and handles system signals gracefully.
 
