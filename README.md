@@ -61,3 +61,12 @@ python3 attendance_checker.py
 ```
 
 This reads the student data, compares it to your thresholds, and writes warnings to `reports/reports.log`.
+
+5.How to trigger the archive feature
+
+You can test this safely using a throwaway project name, like test.
+
+Run the script: ./setup_project.sh
+When asked for a project name, type test
+Wait until you see [+] Directory structure created. — or any point after that, including during the threshold questions
+Press Ctrl+C
